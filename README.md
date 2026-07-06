@@ -2,8 +2,9 @@
 
 A full-stack web application to help job seekers capture, organize, and manage their entire job search in one centralized place � powered by a beautiful, drag-and-drop Kanban board.
 
-> **Live Demo:** _Add your deployed URL here_
-> **GitHub:** _Add your repo URL here_
+> [**Live Demo Link**](https://job-application-tracker-pi-six.vercel.app/)
+
+> [**GitHub Link**](https://github.com/SAM129EER/JobApplicationTracker)
 
 ---
 
