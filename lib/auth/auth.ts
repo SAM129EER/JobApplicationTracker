@@ -9,10 +9,19 @@ const mongooseInstance = await connectDB();
 const client = mongooseInstance.connection.getClient();
 const db = client.db();
 
+const vercelUrl = process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : null;
+
 export const auth = betterAuth({
   database: mongodbAdapter(db, {
     client,
   }),
+  trustedOrigins: [
+    "http://localhost:3000",
+    "https://job-application-tracker-pi-six.vercel.app",
+    ...(vercelUrl ? [vercelUrl] : []),
+  ],
   session: {
     cookieCache: {
       enabled: true,
