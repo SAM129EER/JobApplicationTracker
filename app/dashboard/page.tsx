@@ -29,10 +29,18 @@ async function getBoard(userId: string) {
 
 async function DashboardPage() {
   const session = await getSession();
-  const board = await getBoard(session?.user.id ?? "");
 
   if (!session?.user) {
     redirect("/sign-in");
+  }
+
+  let board = await getBoard(session.user.id);
+
+  // Self-healing fallback: provision board if not found
+  if (!board) {
+    const { initializeUserBoard } = await import("@/lib/init-user-board");
+    await initializeUserBoard(session.user.id);
+    board = await getBoard(session.user.id);
   }
 
   return (
@@ -50,7 +58,7 @@ async function DashboardPage() {
 
 export default async function Dashboard() {
   return (
-    <Suspense fallback={<p>Loading...</p>}>
+    <Suspense fallback={<p className="p-6 text-gray-500">Loading...</p>}>
       <DashboardPage />
     </Suspense>
   );

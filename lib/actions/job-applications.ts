@@ -40,7 +40,10 @@ export async function createJobApplication(data: JobApplicationData) {
     description,
   } = data;
 
-  if (!company || !position || !columnId || !boardId) {
+  const trimmedCompany = company?.trim();
+  const trimmedPosition = position?.trim();
+
+  if (!trimmedCompany || !trimmedPosition || !columnId || !boardId) {
     return { error: "Missing required fields" };
   }
 
@@ -55,7 +58,6 @@ export async function createJobApplication(data: JobApplicationData) {
   }
 
   // Verify column belongs to board
-
   const column = await Column.findOne({
     _id: columnId,
     boardId: boardId,
@@ -71,19 +73,19 @@ export async function createJobApplication(data: JobApplicationData) {
     .lean()) as { order: number } | null;
 
   const jobApplication = await JobApplication.create({
-    company,
-    position,
-    location,
-    notes,
-    salary,
-    jobUrl,
+    company: trimmedCompany,
+    position: trimmedPosition,
+    location: location?.trim(),
+    notes: notes?.trim(),
+    salary: salary?.trim(),
+    jobUrl: jobUrl?.trim(),
     columnId,
     boardId,
     userId: session.user.id,
     tags: tags || [],
-    description,
+    description: description?.trim(),
     status: "applied",
-    order: maxOrder ? maxOrder.order + 1 : 0,
+    order: maxOrder ? maxOrder.order + 100 : 0,
   });
 
   await Column.findByIdAndUpdate(columnId, {
@@ -116,6 +118,8 @@ export async function updateJobApplication(
     return { error: "Unauthorized" };
   }
 
+  await connectDB();
+
   const jobApplication = await JobApplication.findById(id);
 
   if (!jobApplication) {
@@ -139,7 +143,7 @@ export async function updateJobApplication(
     order: number;
     tags: string[];
     description: string;
-  }> = otherUpdates;
+  }> = { ...otherUpdates };
 
   const currentColumnId = jobApplication.columnId.toString();
   const newColumnId = columnId?.toString();
@@ -148,6 +152,16 @@ export async function updateJobApplication(
     newColumnId && newColumnId !== currentColumnId;
 
   if (isMovingToDifferentColumn) {
+    // Verify target column belongs to the user's board
+    const targetColumn = await Column.findOne({
+      _id: newColumnId,
+      boardId: jobApplication.boardId,
+    });
+
+    if (!targetColumn) {
+      return { error: "Target column not found on your board" };
+    }
+
     await Column.findByIdAndUpdate(currentColumnId, {
       $pull: { jobApplications: id },
     });
@@ -165,10 +179,15 @@ export async function updateJobApplication(
       newOrderValue = order * 100;
 
       const jobsThatNeedToShift = jobsInTargetColumn.slice(order);
-      for (const job of jobsThatNeedToShift) {
-        await JobApplication.findByIdAndUpdate(job._id, {
-          $set: { order: job.order + 100 },
-        });
+      if (jobsThatNeedToShift.length > 0) {
+        await JobApplication.bulkWrite(
+          jobsThatNeedToShift.map((job) => ({
+            updateOne: {
+              filter: { _id: job._id },
+              update: { $set: { order: job.order + 100 } },
+            },
+          }))
+        );
       }
     } else {
       if (jobsInTargetColumn.length > 0) {
@@ -198,28 +217,36 @@ export async function updateJobApplication(
     const currentPositionIndex = otherJobsInColumn.findIndex(
       (job) => job.order > currentJobOrder
     );
-    const oldPositionindex =
+    const oldPositionIndex =
       currentPositionIndex === -1
         ? otherJobsInColumn.length
         : currentPositionIndex;
 
     const newOrderValue = order * 100;
 
-    if (order < oldPositionindex) {
-      const jobsToShiftDown = otherJobsInColumn.slice(order, oldPositionindex);
-
-      for (const job of jobsToShiftDown) {
-        await JobApplication.findByIdAndUpdate(job._id, {
-          $set: { order: job.order + 100 },
-        });
+    if (order < oldPositionIndex) {
+      const jobsToShiftDown = otherJobsInColumn.slice(order, oldPositionIndex);
+      if (jobsToShiftDown.length > 0) {
+        await JobApplication.bulkWrite(
+          jobsToShiftDown.map((job) => ({
+            updateOne: {
+              filter: { _id: job._id },
+              update: { $set: { order: job.order + 100 } },
+            },
+          }))
+        );
       }
-    } else if (order > oldPositionindex) {
-      const jobsToShiftUp = otherJobsInColumn.slice(oldPositionindex, order);
-      for (const job of jobsToShiftUp) {
-        const newOrder = Math.max(0, job.order - 100);
-        await JobApplication.findByIdAndUpdate(job._id, {
-          $set: { order: newOrder },
-        });
+    } else if (order > oldPositionIndex) {
+      const jobsToShiftUp = otherJobsInColumn.slice(oldPositionIndex, order);
+      if (jobsToShiftUp.length > 0) {
+        await JobApplication.bulkWrite(
+          jobsToShiftUp.map((job) => ({
+            updateOne: {
+              filter: { _id: job._id },
+              update: { $set: { order: Math.max(0, job.order - 100) } },
+            },
+          }))
+        );
       }
     }
 
@@ -241,6 +268,8 @@ export async function deleteJobApplication(id: string) {
   if (!session?.user) {
     return { error: "Unauthorized" };
   }
+
+  await connectDB();
 
   const jobApplication = await JobApplication.findById(id);
 

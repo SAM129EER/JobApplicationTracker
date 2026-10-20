@@ -1,26 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Board, Column, JobApplication } from "../models/models.types";
 import { updateJobApplication } from "../actions/job-applications";
 
 export function useBoard(initialBoard?: Board | null) {
-  const [board, setBoard] = useState<Board | null>(initialBoard || null);
+  const [board] = useState<Board | null>(initialBoard || null);
   const [columns, setColumns] = useState<Column[]>(initialBoard?.columns || []);
+  const [prevBoard, setPrevBoard] = useState(initialBoard);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (initialBoard) {
-      setBoard(initialBoard);
-      setColumns(initialBoard.columns || []);
-    }
-  }, [initialBoard]);
+  // Synchronize state during render when initialBoard changes
+  if (initialBoard !== prevBoard) {
+    setPrevBoard(initialBoard);
+    setColumns(initialBoard?.columns || []);
+  }
 
   async function moveJob(
     jobApplicationId: string,
     newColumnId: string,
     newOrder: number
   ) {
+    // Snapshot previous state for rollback on mutation failure
+    const previousColumns = columns;
+    setError(null);
+
     setColumns((prev) => {
       const newColumns = prev.map((col) => ({
         ...col,
@@ -28,7 +32,6 @@ export function useBoard(initialBoard?: Board | null) {
       }));
 
       // Find and remove job from the old column
-
       let jobToMove: JobApplication | null = null;
       let oldColumnId: string | null = null;
 
@@ -81,10 +84,30 @@ export function useBoard(initialBoard?: Board | null) {
         columnId: newColumnId,
         order: newOrder,
       });
-    } catch (err) {
-      console.error("Error", err);
+
+      if (result?.error) {
+        // Rollback state if server action returns an error
+        console.error("Failed to update job application:", result.error);
+        setColumns(previousColumns);
+        setError(result.error);
+        return { error: result.error };
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      // Rollback state on network or unexpected error
+      console.error("Network or unexpected error updating job:", err);
+      setColumns(previousColumns);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update job position";
+      setError(errorMessage);
+      return { error: errorMessage };
     }
   }
 
-  return { board, columns, error, moveJob };
+  function clearError() {
+    setError(null);
+  }
+
+  return { board, columns, error, clearError, moveJob };
 }

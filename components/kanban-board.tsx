@@ -6,19 +6,9 @@ import {
   Calendar,
   CheckCircle2,
   Mic,
-  MoreHorizontal,
-  MoreVertical,
-  Trash2,
   XCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Button } from "./ui/button";
 import CreateJobApplicationDialog from "./create-job-dialog";
 import JobApplicationCard from "./job-application-card";
 import { useBoard } from "@/lib/hooks/useBoards";
@@ -42,14 +32,15 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
 
 interface KanbanBoardProps {
-  board: Board;
-  userId: string;
+  board: Board | null;
+  userId?: string;
 }
 
 interface ColConfig {
   color: string;
   icon: React.ReactNode;
 }
+
 const COLUMN_CONFIG: Array<ColConfig> = [
   {
     color: "bg-cyan-500",
@@ -94,6 +85,7 @@ function DroppableColumn({
 
   const sortedJobs =
     column.jobApplications?.sort((a, b) => a.order - b.order) || [];
+
   return (
     <Card className="min-w-[300px] flex-shrink-0 shadow-md p-0">
       <CardHeader
@@ -106,23 +98,9 @@ function DroppableColumn({
               {column.name}
             </CardTitle>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-white hover:bg-white/20"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Column
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <span className="text-xs font-semibold bg-white/20 text-white px-2.5 py-0.5 rounded-full">
+            {sortedJobs.length}
+          </span>
         </div>
       </CardHeader>
 
@@ -178,6 +156,7 @@ function SortableJobCard({
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
   return (
     <div ref={setNodeRef} style={style}>
       <JobApplicationCard
@@ -189,9 +168,9 @@ function SortableJobCard({
   );
 }
 
-export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
+export default function KanbanBoard({ board }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { columns, moveJob } = useBoard(board);
+  const { columns, moveJob, error, clearError } = useBoard(board);
 
   const sortedColumns = columns?.sort((a, b) => a.order - b.order) || [];
 
@@ -212,7 +191,7 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
 
     setActiveId(null);
 
-    if (!over || !board._id) return;
+    if (!over || !board?._id) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
@@ -302,9 +281,21 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
     await moveJob(activeId, targetColumnId, newOrder);
   }
 
+  if (!board) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center">
+        <h3 className="text-lg font-semibold text-gray-900">No board found</h3>
+        <p className="mt-2 text-sm text-gray-500">
+          Setting up your job tracker board... Please refresh in a moment.
+        </p>
+      </div>
+    );
+  }
+
   const activeJob = sortedColumns
     .flatMap((col) => col.jobApplications || [])
     .find((job) => job._id === activeId);
+
   return (
     <DndContext
       sensors={sensors}
@@ -313,6 +304,18 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-4">
+        {error && (
+          <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">
+            <span>{error}</span>
+            <button
+              onClick={clearError}
+              className="ml-4 font-semibold text-red-800 hover:text-red-950"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-4 overflow-x-auto pb-4">
           {sortedColumns.map((col, key) => {
             const config = COLUMN_CONFIG[key] || {

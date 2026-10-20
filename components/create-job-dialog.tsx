@@ -38,10 +38,12 @@ export default function CreateJobApplicationDialog({
   boardId,
 }: CreateJobApplicationDialogProps) {
   const [open, setOpen] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
 
     try {
       const result = await createJobApplication({
@@ -58,16 +60,25 @@ export default function CreateJobApplicationDialog({
         setFormData(INITIAL_FORM_DATA);
         setOpen(false);
       } else {
-        console.error("Failed to create job: ", result.error);
+        setError(result.error);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to create job application"
+      );
+    }
+  }
+
+  function handleOpenChange(isOpen: boolean) {
+    setOpen(isOpen);
+    if (!isOpen) {
+      setError(null);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
         <Button
           variant="outline"
           className="w-full mb-4 justify-start text-muted-foreground border-dashed border-2 hover:border-solid hover:bg-muted/50"
@@ -82,6 +93,11 @@ export default function CreateJobApplicationDialog({
           <DialogDescription>Track a new job application</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={handleSubmit}>
+          {error && (
+            <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -182,7 +198,7 @@ export default function CreateJobApplicationDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>

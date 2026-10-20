@@ -2,7 +2,7 @@
 
 import { JobApplication, Column } from "@/lib/models/models.types";
 import { Card, CardContent } from "./ui/card";
-import { Edit2, ExternalLink, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Edit2, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import React, { useState } from "react";
+
 interface JobApplicationCardProps {
   job: JobApplication;
   columns: Column[];
@@ -38,6 +39,7 @@ export default function JobApplicationCard({
   dragHandleProps,
 }: JobApplicationCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     company: job.company,
     position: job.position,
@@ -52,6 +54,7 @@ export default function JobApplicationCard({
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     try {
       const result = await updateJobApplication(job._id, {
         ...formData,
@@ -61,11 +64,15 @@ export default function JobApplicationCard({
           .filter((tag) => tag.length > 0),
       });
 
-      if (!result.error) {
+      if (result.error) {
+        setError(result.error);
+      } else {
         setIsEditing(false);
       }
-    } catch (err) {
-      console.error("Failed to move job application: ", err);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update job application"
+      );
     }
   }
 
@@ -77,7 +84,7 @@ export default function JobApplicationCard({
         console.error("Failed to delete job application:", result.error);
       }
     } catch (err) {
-      console.error("Failed to move job application: ", err);
+      console.error("Failed to delete job application: ", err);
     }
   }
 
@@ -86,10 +93,15 @@ export default function JobApplicationCard({
       const result = await updateJobApplication(job._id, {
         columnId: newColumnId,
       });
+
+      if (result.error) {
+        console.error("Failed to move job application:", result.error);
+      }
     } catch (err) {
       console.error("Failed to move job application: ", err);
     }
   }
+
   return (
     <>
       <Card
@@ -124,6 +136,7 @@ export default function JobApplicationCard({
                 <a
                   href={job.jobUrl}
                   target="_blank"
+                  rel="noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -174,10 +187,17 @@ export default function JobApplicationCard({
       <Dialog open={isEditing} onOpenChange={setIsEditing}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Job Application</DialogTitle>
-            <DialogDescription>Track a new job application</DialogDescription>
+            <DialogTitle>Edit Job Application</DialogTitle>
+            <DialogDescription>
+              Update details for this job application
+            </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleUpdate}>
+            {error && (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
